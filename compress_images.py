@@ -14,6 +14,44 @@ from pathlib import Path
 # 注册HEIF格式支持
 pillow_heif.register_heif_opener()
 
+def get_user_input():
+    """获取用户输入的配置"""
+    print("=" * 60)
+    print("PPT图片压缩工具 - 配置向导")
+    print("=" * 60)
+    
+    # 获取文件名模式
+    print("\n1. 请输入图片文件名模式:")
+    print("   例如: 'slide_*.png' 或 'presentation_*.jpg' 或 '*.png'")
+    print("   提示: 使用 * 代表通配符，确保文件名中包含数字用于排序")
+    
+    pattern = input("   文件名模式: ").strip()
+    if not pattern:
+        pattern = "*.png"
+        print(f"   使用默认模式: {pattern}")
+    
+    # 获取目标PPT大小
+    print("\n2. 请输入目标PPT文件大小限制 (MB):")
+    print("   例如: 18 (推荐为20MB以下)")
+    
+    try:
+        size_input = input("   目标大小 (MB): ").strip()
+        target_size = float(size_input) if size_input else 18.0
+    except ValueError:
+        target_size = 18.0
+        print(f"   使用默认大小: {target_size} MB")
+    
+    # 获取输出PPT文件名
+    print("\n3. 请输入输出PPT文件名前缀:")
+    print("   例如: '我的演示文稿' 或 '项目汇报'")
+    
+    output_name = input("   文件名前缀: ").strip()
+    if not output_name:
+        output_name = "图片集"
+        print(f"   使用默认前缀: {output_name}")
+    
+    return pattern, target_size, output_name
+
 def optimize_image_for_ppt(image_path, output_path=None, target_size_mb=0.5):
     """
     为PPT优化图片，使用JPEG格式获得更好的压缩比
@@ -107,17 +145,27 @@ def optimize_image_for_ppt(image_path, output_path=None, target_size_mb=0.5):
         print(f"处理 {image_path} 时出错: {str(e)}")
         return None
 
-def batch_compress_for_ppt(input_pattern="*.png", target_ppt_size_mb=18):
+def batch_compress_for_ppt(input_pattern="*.png", target_ppt_size_mb=18, output_prefix="图片集"):
     """
     批量压缩图片用于PPT制作
+    input_pattern: 输入图片文件名模式
     target_ppt_size_mb: 目标PPT总大小(MB)
+    output_prefix: 输出文件名前缀
     """
     image_files = glob.glob(input_pattern)
-    image_files.sort()
+    
+    # 尝试按文件名中的数字排序
+    import re
+    def extract_number(filename):
+        numbers = re.findall(r'\d+', os.path.basename(filename))
+        return int(numbers[-1]) if numbers else 0
+    
+    image_files.sort(key=extract_number)
     
     if not image_files:
-        print("未找到匹配的图片文件")
-        return
+        print(f"未找到匹配模式 '{input_pattern}' 的图片文件")
+        print("请检查文件名模式是否正确，或确保图片文件存在于当前目录")
+        return None
     
     # 计算每张图片的目标大小
     # 为PPT结构预留2MB空间
@@ -159,12 +207,34 @@ def batch_compress_for_ppt(input_pattern="*.png", target_ppt_size_mb=18):
     print(f"预计PPT大小: {(total_compressed_size / 1024 / 1024) + 2:.2f} MB")
     print(f"压缩后的文件保存在: {compressed_dir}/ 目录中")
     
-    return compressed_dir
+    # 保存配置信息
+    config = {
+        'input_pattern': input_pattern,
+        'target_ppt_size_mb': target_ppt_size_mb,
+        'output_prefix': output_prefix,
+        'compressed_dir': compressed_dir,
+        'file_count': len(results)
+    }
+    
+    return config
 
 if __name__ == "__main__":
-    print("开始批量压缩图片用于PPT制作...")
-    print("使用高效压缩技术，确保PPT小于20MB")
+    print("欢迎使用PPT图片压缩工具！")
+    print("本工具可以将图片批量压缩，确保生成的PPT文件小于指定大小。")
     print()
     
-    # 批量压缩所有PNG文件
-    compressed_dir = batch_compress_for_ppt("副本副本灵枢智镜省赛最终_*.png", 18) 
+    # 获取用户配置
+    pattern, target_size, output_prefix = get_user_input()
+    
+    print("\n" + "=" * 60)
+    print("开始压缩处理...")
+    print("=" * 60)
+    
+    # 批量压缩图片
+    config = batch_compress_for_ppt(pattern, target_size, output_prefix)
+    
+    if config:
+        print("\n" + "=" * 60)
+        print("压缩完成！")
+        print("下一步：运行 'python create_ppt.py' 来创建PPT文件")
+        print("=" * 60) 

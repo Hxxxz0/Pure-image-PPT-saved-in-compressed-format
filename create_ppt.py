@@ -4,30 +4,58 @@ from pptx import Presentation
 from pptx.util import Inches
 from PIL import Image
 import re
+import json
 
-def create_ppt_from_compressed_images():
+def get_user_config():
+    """获取用户配置，优先从压缩脚本的配置中读取"""
+    print("=" * 60)
+    print("PPT创建工具 - 配置向导")
+    print("=" * 60)
+    
+    # 默认配置
+    config = {
+        'output_prefix': '图片集',
+        'target_ppt_size_mb': 18,
+        'input_pattern': '*.png'
+    }
+    
+    # 获取输出文件名前缀
+    print("\n请输入PPT文件名称:")
+    print("   例如: '我的演示文稿' 或 '项目汇报' 或 '会议展示'")
+    
+    output_name = input("   PPT文件名称: ").strip()
+    if output_name:
+        config['output_prefix'] = output_name
+    else:
+        print(f"   使用默认名称: {config['output_prefix']}")
+    
+    return config
+
+def create_ppt_from_compressed_images(output_prefix="图片集"):
     """使用压缩后的JPEG图片创建PPT，确保文件小于20MB"""
     
     # 首先检查压缩文件夹是否存在
     compressed_dir = "compressed_for_ppt"
     if not os.path.exists(compressed_dir):
-        print("未找到压缩文件夹，请先运行图片压缩脚本")
-        return
+        print("未找到压缩文件夹，请先运行 'python compress_images.py' 压缩图片")
+        return None
     
     # 获取所有压缩后的JPEG文件并按数字顺序排序
-    jpg_files = glob.glob(os.path.join(compressed_dir, "XXXX_*_optimized.jpg"))
+    jpg_files = glob.glob(os.path.join(compressed_dir, "*_optimized.jpg"))
     
     # 提取文件名中的数字并排序
     def extract_number(filename):
-        match = re.search(r'_(\d+)_optimized\.jpg', filename)
-        return int(match.group(1)) if match else 0
+        # 提取文件名中的所有数字，使用最后一个数字排序
+        numbers = re.findall(r'\d+', os.path.basename(filename))
+        return int(numbers[-1]) if numbers else 0
     
     # 按数字顺序排序
     jpg_files.sort(key=extract_number)
     
     if not jpg_files:
         print("未找到压缩后的图片文件")
-        return
+        print("请确保已运行 'python compress_images.py' 压缩图片")
+        return None
     
     print(f"找到 {len(jpg_files)} 个压缩后的图片文件")
     
@@ -78,7 +106,7 @@ def create_ppt_from_compressed_images():
             continue
     
     # 保存PPT文件
-    output_filename = "灵枢智镜省赛图片集_压缩版.pptx"
+    output_filename = f"{output_prefix}_压缩版.pptx"
     prs.save(output_filename)
     
     # 检查文件大小
@@ -93,29 +121,32 @@ def create_ppt_from_compressed_images():
         print("⚠️  警告：文件大小超过20MB，可能需要进一步压缩")
     else:
         print("✅ 文件大小符合要求（< 20MB）")
+    
+    return output_filename
 
-def create_ppt_from_images():
+def create_ppt_from_images(input_pattern="*.png", output_prefix="图片集"):
     """原版本：将PNG图片作为每张幻灯片的背景，保持图片原始比例"""
     
-    # 获取所有PNG文件并按数字顺序排序
-    png_files = glob.glob("副本副本灵枢智镜省赛最终_*.png")
+    # 获取所有图片文件并按数字顺序排序
+    image_files = glob.glob(input_pattern)
     
     # 提取文件名中的数字并排序
     def extract_number(filename):
-        match = re.search(r'_(\d+)\.png', filename)
-        return int(match.group(1)) if match else 0
+        numbers = re.findall(r'\d+', os.path.basename(filename))
+        return int(numbers[-1]) if numbers else 0
     
     # 按数字顺序排序
-    png_files.sort(key=extract_number)
+    image_files.sort(key=extract_number)
     
-    if not png_files:
-        print("未找到图片文件")
-        return
+    if not image_files:
+        print(f"未找到匹配模式 '{input_pattern}' 的图片文件")
+        print("请检查文件名模式是否正确")
+        return None
     
-    print(f"找到 {len(png_files)} 个图片文件")
+    print(f"找到 {len(image_files)} 个图片文件")
     
     # 获取第一张图片的尺寸来确定幻灯片比例
-    first_image = png_files[0]
+    first_image = image_files[0]
     with Image.open(first_image) as img:
         img_width, img_height = img.size
         aspect_ratio = img_width / img_height
@@ -137,8 +168,8 @@ def create_ppt_from_images():
     print(f"设置幻灯片尺寸: {slide_width.inches:.2f}x{slide_height.inches:.2f}英寸")
     
     # 为每个图片创建一张幻灯片
-    for i, image_path in enumerate(png_files):
-        print(f"正在处理: {image_path}")
+    for i, image_path in enumerate(image_files):
+        print(f"正在处理: {os.path.basename(image_path)}")
         
         # 添加空白幻灯片
         slide_layout = prs.slide_layouts[6]  # 空白布局
@@ -157,22 +188,47 @@ def create_ppt_from_images():
             continue
     
     # 保存PPT文件
-    output_filename = "灵枢智镜省赛图片集_原始比例.pptx"
+    output_filename = f"{output_prefix}_原始版.pptx"
     prs.save(output_filename)
     print(f"PPT已保存为: {output_filename}")
     print(f"总共创建了 {len(prs.slides)} 张幻灯片")
+    
+    return output_filename
 
 if __name__ == "__main__":
-    print("选择PPT创建模式:")
+    print("欢迎使用PPT创建工具！")
+    print("本工具可以将图片转换为PPT演示文稿。")
+    print()
+    
+    # 获取用户配置
+    config = get_user_config()
+    
+    print("\n选择PPT创建模式:")
     print("1. 使用压缩图片（推荐，文件小于20MB）")
     print("2. 使用原始图片（文件可能很大）")
     
-    choice = input("请输入选择 (1/2): ").strip()
+    choice = input("\n请输入选择 (1/2): ").strip()
+    
+    print("\n" + "=" * 60)
+    print("开始创建PPT...")
+    print("=" * 60)
     
     if choice == "1":
-        create_ppt_from_compressed_images()
+        result = create_ppt_from_compressed_images(config['output_prefix'])
     elif choice == "2":
-        create_ppt_from_images()
+        print("\n请输入原始图片文件名模式:")
+        print("例如: '*.png' 或 'slide_*.jpg' 或 'presentation_*.png'")
+        pattern = input("文件名模式: ").strip()
+        if not pattern:
+            pattern = "*.png"
+        result = create_ppt_from_images(pattern, config['output_prefix'])
     else:
         print("使用默认选项：压缩版本")
-        create_ppt_from_compressed_images() 
+        result = create_ppt_from_compressed_images(config['output_prefix'])
+    
+    if result:
+        print("\n" + "=" * 60)
+        print(f"🎉 PPT创建成功！文件已保存为: {result}")
+        print("=" * 60)
+    else:
+        print("\n❌ PPT创建失败，请检查配置和文件") 
